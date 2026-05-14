@@ -1,13 +1,28 @@
 require("dotenv").config();
 
-const { Telegraf,Markup } = require("telegraf");
-const { rewriteText,generateExcuse } = require("./services/openai");
-const toneKeyboard = require("./keyboards/toneKeyboard");
-const mainMenu = require("./keyboards/mainMenu");
+const { Telegraf } = require("telegraf");
 
-const userStates = require("./state/userState");
+const {
+  rewriteText,
+  generateExcuse,
+  generateSorry,
+} = require("./services/openai");
 
-const bot = new Telegraf(process.env.BOT_TOKEN);
+const toneKeyboard = require(
+  "./keyboards/toneKeyboard"
+);
+
+const mainMenu = require(
+  "./keyboards/mainMenu"
+);
+
+const userStates = require(
+  "./state/userState"
+);
+
+const bot = new Telegraf(
+  process.env.BOT_TOKEN
+);
 
 bot.start((ctx) => {
   ctx.reply(
@@ -15,13 +30,24 @@ bot.start((ctx) => {
     mainMenu()
   );
 });
+
+// REWRITE
 bot.hears("✍ Rewrite Text", (ctx) => {
+
+  const telegramId = String(ctx.from.id);
+
+  userStates[telegramId] = {
+    mode: "rewrite",
+  };
+
   ctx.reply(
     "Send the text you want rewritten."
   );
 });
 
+// EXCUSE
 bot.hears("🧠 Generate Excuse", (ctx) => {
+
   const telegramId = String(ctx.from.id);
 
   userStates[telegramId] = {
@@ -32,20 +58,44 @@ bot.hears("🧠 Generate Excuse", (ctx) => {
   ctx.reply("Who is it for?");
 });
 
-// Save user message
+// SORRY
+bot.hears("🙏 Sorry", (ctx) => {
+
+  const telegramId = String(ctx.from.id);
+
+  userStates[telegramId] = {
+    mode: "sorry",
+    step: "who",
+  };
+
+  ctx.reply("Who is it for?");
+});
+
+// TEXT HANDLER
 bot.on("text", async (ctx) => {
+
   const telegramId = String(ctx.from.id);
 
   const text = ctx.message.text;
 
   const state = userStates[telegramId];
 
+  // IGNORE MENU BUTTONS
+  if (
+    text === "✍ Rewrite Text" ||
+    text === "🧠 Generate Excuse" ||
+    text === "🙏 Sorry"
+  ) {
+    return;
+  }
+
   // EXCUSE FLOW
   if (state?.mode === "excuse") {
 
-    // STEP 1
     if (state.step === "who") {
+
       state.who = text;
+
       state.step = "situation";
 
       return ctx.reply(
@@ -53,10 +103,34 @@ bot.on("text", async (ctx) => {
       );
     }
 
-    // STEP 2
     if (state.step === "situation") {
+
       state.situation = text;
-      state.step = "tone";
+
+      return ctx.reply(
+        "Choose tone:",
+        toneKeyboard()
+      );
+    }
+  }
+
+  // SORRY FLOW
+  if (state?.mode === "sorry") {
+
+    if (state.step === "who") {
+
+      state.who = text;
+
+      state.step = "reason";
+
+      return ctx.reply(
+        "What are you apologizing for?"
+      );
+    }
+
+    if (state.step === "reason") {
+
+      state.reason = text;
 
       return ctx.reply(
         "Choose tone:",
@@ -66,19 +140,20 @@ bot.on("text", async (ctx) => {
   }
 
   // REWRITE FLOW
-  userStates[telegramId] = {
-    mode: "rewrite",
-    text,
-  };
+  if (state?.mode === "rewrite") {
 
-  await ctx.reply(
-    "Choose tone:",
-    toneKeyboard()
-  );
+    state.text = text;
+
+    return ctx.reply(
+      "Choose tone:",
+      toneKeyboard()
+    );
+  }
 });
 
-// Handle tone selection
+// TONE HANDLER
 bot.action(/tone_(.+)/, async (ctx) => {
+
   const telegramId = String(ctx.from.id);
 
   const tone = ctx.match[1];
@@ -86,20 +161,26 @@ bot.action(/tone_(.+)/, async (ctx) => {
   const state = userStates[telegramId];
 
   if (!state) {
-    return ctx.reply("Send a message first.");
+    return ctx.reply(
+      "Send a message first."
+    );
   }
 
-  await ctx.reply("✨ Generating...");
+  await ctx.reply(
+    "✨ Generating..."
+  );
 
   try {
 
-    // EXCUSE MODE
+    // EXCUSE
     if (state.mode === "excuse") {
-      const result = await generateExcuse(
-        state.who,
-        state.situation,
-        tone
-      );
+
+      const result =
+        await generateExcuse(
+          state.who,
+          state.situation,
+          tone
+        );
 
       await ctx.reply(result);
 
@@ -108,17 +189,36 @@ bot.action(/tone_(.+)/, async (ctx) => {
       return;
     }
 
-    // REWRITE MODE
-    const rewritten = await rewriteText(
-      state.text,
-      tone
-    );
+    // SORRY
+    if (state.mode === "sorry") {
+
+      const result =
+        await generateSorry(
+          state.who,
+          state.reason,
+          tone
+        );
+
+      await ctx.reply(result);
+
+      delete userStates[telegramId];
+
+      return;
+    }
+
+    // REWRITE
+    const rewritten =
+      await rewriteText(
+        state.text,
+        tone
+      );
 
     await ctx.reply(rewritten);
 
     delete userStates[telegramId];
 
   } catch (error) {
+
     console.error(error);
 
     await ctx.reply(

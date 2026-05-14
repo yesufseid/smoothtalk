@@ -1,10 +1,10 @@
-const OpenAI = require("openai");
+const { GoogleGenAI } = require("@google/genai");
 
-const client = new OpenAI({
-  baseURL: 'https://openrouter.ai/api/v1',
-  apiKey:process.env.OPENROUTER_API_KEY,
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
 });
-async function rewriteText(text,tone) {
+
+async function rewriteText(text, tone) {
   const prompt = `
 You are SmoothTalk AI.
 
@@ -23,31 +23,22 @@ Rules:
 Message:
 ${text}
 `;
-// First API call with reasoning
-const apiResponse = await client.chat.completions.create({
-  model: 'inclusionai/ring-2.6-1t:free',
-  messages: [
-    {
-      role: 'user',
-      content:prompt,
-    },
-  ],
-  reasoning: { enabled: true }
-});
 
-// Extract the assistant message with reasoning_details
-  console.log(apiResponse.choices[0].message.content);
-  
-const response = apiResponse.choices[0].message.content
-return response
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+    });
+
+    return response.text;
+
+  } catch (error) {
+    console.error(error);
+    return "Something went wrong.";
+  }
 }
 
-async function generateExcuse(
-  who,
-  situation,
-  tone
-) {
-
+async function generateExcuse(who, situation, tone) {
   const prompt = `
 Generate a believable message.
 
@@ -70,37 +61,79 @@ Rules:
 `;
 
   try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: `
+You help users write socially smart messages.
 
-    const apiResponse =
-      await client.chat.completions.create({
-        model:
-          "meta-llama/llama-3.3-70b-instruct:free",
-
-        messages: [
-          {
-            role: "system",
-            content:
-              "You help users write socially smart messages.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-
+${prompt}
+`,
+      config: {
         temperature: 0.9,
+      },
+    });
+
+    return response.text;
+
+  } catch (error) {
+    console.error(error);
+    return "Something went wrong.";
+  }
+}
+async function generateSorry(
+   who,
+  reason,
+  tone
+) {
+
+  const prompt = `
+Write a sincere apology message and try to give short answear as possible.
+Who is it for:
+${who}
+
+Reason:
+${reason}
+
+Tone:
+${tone}
+
+Rules:
+- natural
+- emotionally intelligent
+- human
+- believable
+- short
+- sincere
+`;
+
+  try {
+
+    const response =
+      await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+
+        contents: `
+You help users write thoughtful apology messages.
+
+${prompt}
+`,
+
+        config: {
+          temperature: 0.9,
+        },
       });
 
-    return apiResponse
-      .choices[0]
-      .message
-      .content;
+    return response.text;
 
   } catch (error) {
 
-    console.log(error);
+    console.error(error);
 
     return "Something went wrong.";
   }
 }
-module.exports = { rewriteText,generateExcuse};
+module.exports = {
+  rewriteText,
+  generateExcuse,
+  generateSorry
+};
