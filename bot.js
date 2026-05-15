@@ -227,6 +227,6 @@ bot.action(/tone_(.+)/, async (ctx) => {
   }
 });
 
-bot.launch();
 
 console.log("Bot running...");
+module.exports = bot;
