@@ -1,19 +1,15 @@
 const express = require("express");
-
-const bot = require("./bot")
 const app = express();
-;
-
-app.use(bot.webhookCallback("/bot"));
+const bot = require("./bot");
 
 const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, async () => {
-  console.log(`Server running on ${PORT}`);
-
-  await bot.telegram.setWebhook(
-    `${process.env.RENDER_EXTERNAL_URL}/bot`
-  );
-
-  console.log("Webhook set");
+bot.launch()
+app.get("/", (req, res) => {
+  res.send("Bot is running");
 });
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+
+console.log("Bot running...");
